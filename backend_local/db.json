@@ -1,0 +1,6 @@
+{
+  "posts": [
+    { "id": 1, "title": "Primera publicación", "body": "Datos locales", "userId": 1 },
+    { "id": 2, "title": "Segunda publicación", "body": "Datos locales", "userId": 1 }
+  ]
+}

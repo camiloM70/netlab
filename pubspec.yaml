@@ -1,0 +1,25 @@
+name: netlab
+description: "NetLab — Laboratorio de Redes. Demostración de API REST y conectividad en Flutter."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Textos de los componentes Material en español (tooltips, menú de copiar, etc.).
+  flutter_localizations:
+    sdk: flutter
+  http: ^1.2.2              # Cliente HTTP simple: explorador REST.
+  dio: ^5.7.0               # Cliente avanzado: interceptores, timeouts, errores.
+  connectivity_plus: ^6.1.0 # Cambios de conectividad reportados por el sistema.
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
