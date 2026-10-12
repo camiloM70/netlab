@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/config/endpoints.dart';
 import '../../core/errors/net_error.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/format.dart';
 import '../../models/api_result.dart';
+import '../../models/connectivity_snapshot.dart';
+import '../../models/severity.dart';
 import '../../services/diagnostics_service.dart';
 import '../../services/dio_api_service.dart';
 import '../../services/netlab_controller.dart';
 import '../../widgets/common.dart';
+import '../../widgets/responsive.dart';
 import '../../widgets/visuals.dart';
 
 class DiagnosticsScreen extends StatefulWidget {
@@ -54,80 +58,81 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
           children: [
             const ScreenHeader(
               title: 'Diagnóstico',
-              subtitle: 'Conectividad del sistema y accesibilidad del servidor',
+              subtitle: 'Red del dispositivo y acceso real al servidor',
             ),
-            _connectivityPanel(c),
-            const SizedBox(height: 12),
-            _serverPanel(c),
-            const SizedBox(height: 12),
-            _dioPanel(c),
+            _networkVsInternet(c),
+            const SizedBox(height: NetSpacing.lg),
+            // Pantallas anchas: prueba del servidor a la izquierda, Dio a la derecha.
+            TwoPane(
+              breakpoint: 900,
+              first: _serverPanel(c),
+              second: _dioPanel(c),
+            ),
+            const SizedBox(height: NetSpacing.lg),
+            _eventsPanel(c),
           ],
         );
       },
     );
   }
 
-  Widget _connectivityPanel(NetLabController c) {
+  /// Diferencia clave: estar en una red ≠ tener acceso al servicio.
+  Widget _networkVsInternet(NetLabController c) {
     final snap = c.snapshot;
-    return PanelCard(
-      title: 'Conectividad reportada por el sistema',
-      icon: Icons.settings_input_antenna,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(connectivityIcon(snap),
-                  color: (snap?.isOffline ?? false)
-                      ? NetColors.error
-                      : NetColors.accent),
-              const SizedBox(width: 10),
-              Text(snap?.label ?? 'Comprobando…',
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w700)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Este dato proviene de connectivity_plus y NO prueba que haya Internet: '
-            'puedes estar conectado a un Wi-Fi sin salida a la red.',
-            style: TextStyle(color: NetColors.textMuted, fontSize: 12),
-          ),
-          const SizedBox(height: 12),
-          const Text('Cambios observados en esta sesión',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-          const SizedBox(height: 6),
-          if (c.events.isEmpty)
-            const Text('Sin datos todavía.',
-                style: TextStyle(color: NetColors.textMuted, fontSize: 12))
-          else
-            for (final e in c.events.take(8))
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Row(
+    final offline = snap?.isOffline ?? false;
+    final check = c.lastCheck;
+    final reached = check?.result.hasResponse ?? false;
+    return ResponsiveGrid(
+      minItemWidth: 300,
+      maxColumns: 2,
+      children: [
+        StatusCard(
+          title: '1 · Red del dispositivo (la reporta el sistema)',
+          icon: Icons.settings_input_antenna,
+          headline: snap == null ? 'Comprobando…' : snap.label,
+          headlineIcon: connectivityIcon(snap),
+          severity: snap == null
+              ? Severity.neutral
+              : (offline ? Severity.error : Severity.ok),
+          detail:
+              'Dato de connectivity_plus. Android informa del tipo de red activa; '
+              'no indica la intensidad de señal ni si hay salida a Internet.',
+          footer: (snap == null || snap.isOffline)
+              ? null
+              : Wrap(
+                  spacing: NetSpacing.sm,
+                  runSpacing: NetSpacing.sm,
                   children: [
-                    Text(formatTime(e.at),
-                        style: monoStyle.copyWith(color: NetColors.textMuted)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: Text(e.label,
-                            style: const TextStyle(fontSize: 13))),
-                    if (e.initial)
-                      const Text('estado inicial',
-                          style: TextStyle(
-                              color: NetColors.textMuted, fontSize: 11)),
+                    for (final r in snap.active)
+                      StatusPill(
+                          label: connectivityName(r), severity: Severity.info),
                   ],
                 ),
-              ),
-        ],
-      ),
+        ),
+        StatusCard(
+          title: '2 · Acceso real al servicio (petición HTTP)',
+          icon: Icons.public,
+          headline: check == null
+              ? (c.checking ? 'Comprobando…' : 'Sin comprobar')
+              : check.verdict.title,
+          headlineIcon:
+              check == null ? Icons.public : outcomeIcon(check.result.outcome),
+          severity: check == null ? Severity.neutral : check.verdict.severity,
+          loading: c.checking && check == null,
+          detail: check == null
+              ? 'Ejecuta la prueba para saber si el servidor responde.'
+              : (reached
+                  ? 'El servidor respondió: hay ruta real hasta el servicio.'
+                  : 'No hubo respuesta HTTP. Puedes estar conectado a una red sin salida a Internet.'),
+        ),
+      ],
     );
   }
 
   Widget _serverPanel(NetLabController c) {
     final check = c.lastCheck;
     return PanelCard(
-      title: 'Prueba de acceso al servidor (HTTPS)',
+      title: 'Prueba de acceso al servidor',
       icon: Icons.dns_outlined,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,58 +141,69 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
             controller: _url,
             keyboardType: TextInputType.url,
             autocorrect: false,
+            enableSuggestions: false,
+            minLines: 1,
+            maxLines: 3,
+            inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
             decoration: netInput('URL a comprobar'),
           ),
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed:
-                c.checking ? null : () => c.runServerCheck(url: _url.text),
-            icon: c.checking
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.network_ping),
-            label: Text(c.checking
-                ? 'Comprobando…'
-                : (check == null ? 'Ejecutar prueba' : 'Ejecutar de nuevo')),
+          const SizedBox(height: NetSpacing.md),
+          PrimaryButton(
+            label: check == null ? 'Ejecutar prueba' : 'Ejecutar de nuevo',
+            loadingLabel: 'Comprobando…',
+            icon: Icons.network_ping,
+            loading: c.checking,
+            onPressed: () => c.runServerCheck(url: _url.text),
           ),
-          const SizedBox(height: 12),
-          if (check == null && !c.checking)
+          const SizedBox(height: NetSpacing.lg),
+          if (check == null && c.checking)
+            const LoadingState(message: 'Comprobando servidor…')
+          else if (check == null)
             const EmptyState(
                 icon: Icons.dns_outlined,
                 message: 'Aún no se ha ejecutado ninguna prueba.')
-          else if (check != null)
+          else ...[
             Semantics(
               liveRegion: true,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  StatusPill(
-                    label: check.verdict.title,
-                    severity: check.verdict.severity,
-                    icon: outcomeIcon(check.result.outcome),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(check.verdict.detail),
-                  const SizedBox(height: 8),
-                  KeyValueRow(
-                      'Fecha y hora', formatDateTime(check.result.timestamp)),
-                  KeyValueRow('Código HTTP',
-                      check.result.statusCode?.toString() ?? 'Sin respuesta'),
-                  KeyValueRow(
-                      'Tiempo HTTP', formatDuration(check.result.duration)),
-                  if (check.latency != null)
-                    KeyValueRow('Clasificación', check.latency!.label),
-                  KeyValueRow('URL', check.result.url),
-                ],
-              ),
+              child: Text(check.verdict.detail),
             ),
-          const SizedBox(height: 8),
-          const Text(
-            'El tiempo mostrado es el tiempo de respuesta HTTP (petición completa), no un ping ICMP. '
-            'Tampoco es una medición de velocidad de descarga o subida.',
-            style: TextStyle(color: NetColors.textMuted, fontSize: 11.5),
+            const SizedBox(height: NetSpacing.md),
+            ResponsiveGrid(
+              minItemWidth: 120,
+              maxColumns: 3,
+              children: [
+                MetricTile(
+                  filled: true,
+                  label: 'Código HTTP',
+                  value: check.result.statusCode?.toString() ?? '—',
+                  severity: outcomeSeverity(check.result.outcome),
+                ),
+                MetricTile(
+                    filled: true,
+                    label: 'Tiempo HTTP',
+                    value: formatDuration(check.result.duration)),
+                MetricTile(
+                  filled: true,
+                  label: 'Clasificación',
+                  value: check.latency?.label ?? '—',
+                  severity: switch (check.latency) {
+                    LatencyClass.fast => Severity.ok,
+                    LatencyClass.acceptable => Severity.warn,
+                    LatencyClass.slow => Severity.error,
+                    null => Severity.neutral,
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: NetSpacing.md),
+            KeyValueRow('Fecha y hora', formatDateTime(check.result.timestamp)),
+            KeyValueRow('URL', check.result.url),
+          ],
+          const SizedBox(height: NetSpacing.md),
+          Text(
+            'El tiempo mostrado es el de la petición HTTP completa, no un ping ICMP, '
+            'ni una medición de velocidad de descarga o subida.',
+            style: NetText.muted(context, size: 11.5),
           ),
         ],
       ),
@@ -200,38 +216,35 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       icon: Icons.bug_report_outlined,
       trailing: TextButton(
         onPressed: c.dioLog.isEmpty ? null : c.clearDioLog,
-        child: const Text('Limpiar trazas'),
+        child: const Text('Limpiar'),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Cada botón lanza una petición real con Dio. Un interceptor registra método, URL (sin query), '
-            'código y duración; nunca encabezados ni cuerpos.',
-            style: TextStyle(color: NetColors.textMuted, fontSize: 12),
+          Text(
+            'Cada botón lanza una petición real con Dio. Un interceptor registra método, '
+            'URL (sin query), código y duración; nunca encabezados ni cuerpos.',
+            style: NetText.muted(context),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: NetSpacing.md),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: NetSpacing.sm,
+            runSpacing: NetSpacing.sm,
             children: [
               for (final s in DioScenario.values)
                 OutlinedButton(
-                  onPressed: _dioBusy ? null : () => _runDio(s),
-                  child: Text(s.label),
-                ),
+                    onPressed: _dioBusy ? null : () => _runDio(s),
+                    child: Text(s.label)),
             ],
           ),
           if (_dioBusy) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: NetSpacing.md),
             const LinearProgressIndicator(),
           ],
           if (_dioResult != null && _dioScenario != null) ...[
-            const SizedBox(height: 10),
-            Text(_dioScenario!.description,
-                style:
-                    const TextStyle(color: NetColors.textMuted, fontSize: 12)),
-            const SizedBox(height: 6),
+            const SizedBox(height: NetSpacing.md),
+            Text(_dioScenario!.description, style: NetText.muted(context)),
+            const SizedBox(height: NetSpacing.sm),
             Semantics(
               liveRegion: true,
               child: StatusPill(
@@ -243,26 +256,62 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
               ),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: NetSpacing.md),
           Container(
             width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 70, maxHeight: 200),
-            padding: const EdgeInsets.all(10),
+            constraints: const BoxConstraints(minHeight: 72, maxHeight: 220),
+            padding: const EdgeInsets.all(NetSpacing.md),
             decoration: BoxDecoration(
               color: NetColors.background,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(NetRadius.md),
               border: Border.all(color: NetColors.border),
             ),
             child: c.dioLog.isEmpty
-                ? const Text('Aún no hay trazas. Ejecuta un escenario.',
-                    style: TextStyle(color: NetColors.textMuted, fontSize: 12))
+                ? Text('Aún no hay trazas. Ejecuta un escenario.',
+                    style: NetText.muted(context))
                 : SingleChildScrollView(
                     child:
-                        SelectableText(c.dioLog.join('\n'), style: monoStyle),
-                  ),
+                        SelectableText(c.dioLog.join('\n'), style: monoStyle)),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _eventsPanel(NetLabController c) {
+    return PanelCard(
+      title: 'Cambios de conectividad observados en esta sesión',
+      icon: Icons.timeline,
+      child: c.events.isEmpty
+          ? Text('Sin datos todavía.', style: NetText.muted(context))
+          : Column(
+              children: [
+                for (final ConnectivitySnapshot e in c.events.take(8))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Icon(connectivityIcon(e),
+                            size: 16,
+                            color: e.isOffline
+                                ? NetColors.error
+                                : NetColors.accent),
+                        const SizedBox(width: NetSpacing.sm),
+                        Text(formatTime(e.at),
+                            style:
+                                monoStyle.copyWith(color: NetColors.textMuted)),
+                        const SizedBox(width: NetSpacing.md),
+                        Expanded(
+                            child:
+                                Text(e.label, overflow: TextOverflow.ellipsis)),
+                        if (e.initial)
+                          Text('inicial',
+                              style: NetText.muted(context, size: 11)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 }

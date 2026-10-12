@@ -1,8 +1,7 @@
 /// Configuración de endpoints de demostración.
 ///
 /// JSONPlaceholder acepta POST/PUT/DELETE y responde con códigos de éxito,
-/// pero NO persiste los cambios (es una API de pruebas). Para demostrar
-/// persistencia real usa el backend local de `backend_local/` (json-server).
+/// pero NO persiste los cambios (es una API de pruebas).
 class Endpoints {
   Endpoints._();
 
@@ -32,8 +31,7 @@ class Endpoints {
       method: 'POST',
       url: '$base/posts',
       headers: '{"Accept": "application/json"}',
-      body:
-          '{\n  "title": "NetLab",\n  "body": "Prueba desde Flutter",\n  "userId": 1\n}',
+      body: '{\n  "title": "NetLab",\n  "body": "Prueba desde Flutter",\n  "userId": 1\n}',
       description: 'Envía un objeto JSON. Responde 201 con un id simulado.',
     ),
     RequestExample(
@@ -41,8 +39,7 @@ class Endpoints {
       method: 'PUT',
       url: '$base/posts/1',
       headers: '{"Accept": "application/json"}',
-      body:
-          '{\n  "id": 1,\n  "title": "Título actualizado",\n  "body": "Cuerpo actualizado",\n  "userId": 1\n}',
+      body: '{\n  "id": 1,\n  "title": "Título actualizado",\n  "body": "Cuerpo actualizado",\n  "userId": 1\n}',
       description: 'Envía una actualización de prueba. Responde 200.',
     ),
     RequestExample(
@@ -55,8 +52,7 @@ class Endpoints {
       title: 'GET 404',
       method: 'GET',
       url: '$base/posts/99999',
-      description:
-          'Recurso inexistente: HTTP 404 válido, no es un fallo de red.',
+      description: 'Recurso inexistente: HTTP 404 válido, no es un fallo de red.',
     ),
     RequestExample(
       title: '¿Persistió el POST?',

@@ -3,17 +3,26 @@
 Aplicación Flutter para la actividad de Programación Móvil, **Tema 5: Redes (API REST y conectividad)**.
 Permite demostrar con un dispositivo real cómo una app detecta cambios de conectividad y se comunica con servidores mediante HTTP/REST.
 
-> **Estado de verificación:** el código se escribió en un entorno sin Flutter ni acceso a `pub.dev`, por lo que
-> **`flutter pub get`, `flutter analyze`, `flutter test` y `flutter run` NO se han ejecutado todavía**.
-> Antes de la exposición ejecuta los comandos de la sección 6 y corrige lo que aparezca.
+
 
 ## 1. Problema que resuelve
 Estar conectado a Wi-Fi no significa tener Internet, y una respuesta HTTP 404 no es un fallo de red. NetLab separa
 ambos conceptos: muestra lo que **reporta el sistema** (`connectivity_plus`) y lo que **comprueba una petición HTTP real**.
 
+## 1.1 Diseño y responsive
+- **Tema centralizado** en `lib/core/theme/app_theme.dart`: colores (`NetColors`), espaciados (`NetSpacing`), radios (`NetRadius`), tipografía (`TextTheme`), botones, chips, navegación y campos de texto. Tipografía: la del sistema (Roboto en Android); no se añadieron fuentes ni paquetes.
+- **Puntos de quiebre** (`widgets/responsive.dart`): <600 móvil, 600–1023 tableta, ≥1024 pantalla grande. Los paneles deciden según el ancho DISPONIBLE (`LayoutBuilder`).
+- **Navegación:** barra inferior en móvil (o con poca altura), riel lateral en tableta, riel extendido en pantalla grande.
+- **Dashboard:** tarjetas en 1 columna (móvil) o 2/4 columnas según el espacio.
+- **API REST:** solicitud y respuesta lado a lado desde ≈860 dp; selector de método con Wrap (GET, POST, PUT, PATCH, DELETE), botones Formatear/Limpiar JSON, pestañas Cuerpo/Encabezados.
+- **Historial:** tarjetas en móvil; columnas alineadas desde 720 dp. Las URLs largas se recortan con elipsis.
+- **Diagnóstico:** separa "red del dispositivo" (la reporta el sistema) de "acceso real al servicio" (petición HTTP).
+- Componentes reutilizables: `PanelCard`, `StatusCard`, `MetricTile`, `PrimaryButton`, `ActionTile`, `EmptyState`, `LoadingState`, `ErrorState`, `MethodBadge`, `ResponsiveGrid`, `TwoPane`, `AdaptiveChipRow`, `confirmDialog`, `HttpMethodSelector`, `RequestEditor`, `ResponseViewer`.
+- `test/responsive_test.dart` recorre las 4 secciones con anchos de 320, 360, 390, 430, 600, 768 y 1024 dp buscando errores de layout.
+
 ## 2. Funcionalidades
 - **Inicio:** conectividad del sistema, accesibilidad del servidor (petición real con timeout), último tiempo de respuesta, contadores de la sesión, actividad reciente.
-- **API REST:** GET/POST/PUT/DELETE reales, encabezados y cuerpo JSON validados, código de estado, tiempo (cronómetro), encabezados relevantes, JSON formateado, copiar respuesta, cancelar, confirmación en DELETE y ejemplos precargados.
+- **API REST:** GET/POST/PUT/PATCH/DELETE reales, encabezados y cuerpo JSON validados, código de estado, tiempo (cronómetro), encabezados relevantes, JSON formateado, copiar respuesta, cancelar, confirmación en DELETE y ejemplos precargados.
 - **Diagnóstico:** cambios de conectividad en vivo, prueba de acceso a un endpoint HTTPS (URL editable), clasificación del tiempo de respuesta HTTP y panel de depuración con **Dio** (interceptor, timeout forzado, 404, DNS).
 - **Historial:** registro real de cada solicitud/comprobación, filtros por tipo y resultado, detalle expandible y limpieza con confirmación. Es **en memoria** (se pierde al cerrar la app).
 
@@ -25,7 +34,7 @@ ambos conceptos: muestra lo que **reporta el sistema** (`connectivity_plus`) y l
 | `connectivity_plus` | Eventos de conectividad del sistema |
 | `flutter_localizations` (SDK) | Textos de Material en español |
 
-Los números de versión de `pubspec.yaml` son rangos (`^`); si `pub get` se queja con tu SDK, ajusta el rango.
+
 
 ## 4. Arquitectura
 ```
@@ -37,23 +46,21 @@ lib/
   features/ shell · dashboard · api_explorer · connectivity (diagnóstico) · history
   widgets/  componentes compartidos
 test/       pruebas unitarias y de widgets (clientes HTTP simulados)
-backend_local/db.json   API local que SÍ persiste (json-server)
-tools/      setup.sh y snippet del AndroidManifest
 ```
 `NetLabController` (ChangeNotifier) une los servicios, es el único que se suscribe a la conectividad y cancela todo en `dispose`.
 No se usa gestor de estado externo para mantener el código fácil de explicar.
 
 ## 5. Instalación
 Requisitos: Flutter estable reciente (Dart ≥ 3.5), Android SDK/dispositivo real con depuración USB.
+```
 
 Este repositorio contiene el código Dart, pruebas y `pubspec.yaml`. Las carpetas de plataforma se generan con Flutter:
 ```bash
-# Linux / macOS / Git Bash
-./tools/setup.sh
-# Windows (PowerShell) — equivalente manual:
-#   flutter create --org co.netlab --project-name netlab --platforms=android,ios,web .
+# Linux / macOS / Windows
+flutter create --org co.netlab --project-name netlab --platforms=android,ios,web .
 #   (si Flutter creó lib/main.dart o test/widget_test.dart de ejemplo, restaura los de este proyecto)
-#   añade los permisos de la sección 7 y ejecuta: flutter pub get
+#   añade los permisos de la sección 7 y ejecuta:
+flutter pub get
 ```
 
 ## 6. Ejecución y pruebas
@@ -73,7 +80,7 @@ flutter run -d chrome  # Web (ver CORS)
 
 Son permisos "normales": **no hay diálogo de autorización en tiempo de ejecución** y NetLab no simula ninguno.
 Android bloquea HTTP sin cifrar (cleartext) desde Android 9; por eso las APIs remotas usan HTTPS. Para el backend local
-por `http://` añade `android:usesCleartextTraffic="true"` **solo** en `android/app/src/debug/AndroidManifest.xml` (ver `tools/AndroidManifest.snippet.xml`).
+por `http://` añade `android:usesCleartextTraffic="true"` **solo** en `android/app/src/debug/AndroidManifest.xml`.
 
 ### iOS
 No requiere permisos para esta app. App Transport Security (ATS) exige HTTPS por defecto; NetLab usa HTTPS y **no** añade excepciones.
@@ -100,10 +107,6 @@ Si usas tu propia API, habilita CORS en el backend (p. ej. en json-server ya vie
 | `/posts/101` | GET | 404 tras el POST: demuestra que no se guardó |
 | `/todos/1` | GET | Comprobación de servidor |
 
-**Persistencia real:** `cd backend_local && npx json-server@0.17.4 --watch db.json --host 0.0.0.0 --port 3000`.
-Emulador Android: `http://10.0.2.2:3000/posts`. Dispositivo físico: `http://IP-DE-TU-PC:3000/posts` (misma red; requiere cleartext en debug).
-POST a `/posts` y luego GET a `/posts` mostrará el recurso guardado.
-
 ## 9. Cómo probar errores y falta de conexión
 1. **Sin conexión:** activa el modo avión (o apaga Wi-Fi/datos), pulsa *Ejecutar prueba* → "Sin conexión". Observa el cambio en el panel de conectividad.
 2. **Wi-Fi sin Internet:** conéctate a una red sin salida: el sistema dirá "Wi-Fi" pero la prueba HTTP fallará.
@@ -112,7 +115,7 @@ POST a `/posts` y luego GET a `/posts` mostrará el recurso guardado.
 5. **HTTP 404:** API REST → ejemplo *GET 404* (llega respuesta válida; no es fallo de red).
 6. **JSON malformado / URL inválida:** escribe un cuerpo roto o una URL sin `https://`: se valida antes de enviar.
 
-## 10. Guion de demostración (2–3 min)
+## 10. Guion de demostración
 1. **Inicio:** "Esto es lo que reporta el sistema (Wi-Fi) y esto lo que comprobó una petición real al servidor."
 2. **API REST → GET lista:** muestra el JSON real, el 200 y el tiempo.
 3. **POST crear:** muestra el 201 y el aviso de que JSONPlaceholder no persiste; luego *¿Persistió el POST?* → 404.
@@ -121,23 +124,19 @@ POST a `/posts` y luego GET a `/posts` mostrará el recurso guardado.
 6. **Desactiva modo avión:** la app detecta el cambio y vuelve a comprobar sola (≈1 s); repite la prueba.
 7. **Historial:** filtra por método/resultado y abre un detalle.
 
-*Reparto sugerido (3–4 integrantes):* (1) conceptos REST/HTTP/códigos; (2) arquitectura y `http` + explorador; (3) conectividad, Dio y manejo de errores; (4) permisos, CORS/ATS, pruebas y demo.
+
 
 ## 11. Limitaciones conocidas
 - Verificación pendiente (ver aviso inicial). iOS no probado.
 - Historial solo en memoria.
 - Cancelar una solicitud ignora la respuesta pero no aborta la conexión (con `http` clásico no es posible abortar).
-- Con JSONPlaceholder no hay persistencia; usa `backend_local` para demostrarla.
+- JSONPlaceholder no persiste los cambios enviados con POST, PUT o DELETE.
 - Los datos de `connectivity_plus` varían por plataforma.
 
 ## 12. Capturas
 _Pendiente: añadir capturas reales tomadas en el dispositivo._
 
-## 13. Integrantes
-- Nombre 1: ______
-- Nombre 2: ______
-- Nombre 3: ______
-- Nombre 4: ______
+## 13. Créditos
+El código de NetLab se distribuye bajo la licencia [MIT](./LICENSE).
 
-## 14. Créditos
-API de pruebas: [JSONPlaceholder](https://jsonplaceholder.typicode.com). Licencia: definir por el equipo.
+API de pruebas: [JSONPlaceholder](https://jsonplaceholder.typicode.com), que indica que se puede usar en desarrollos y pruebas; su proyecto no especifica una licencia formal. Consulta su [repositorio](https://github.com/typicode/jsonplaceholder).

@@ -5,45 +5,15 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:netlab/app.dart';
-import 'package:netlab/services/api_service.dart';
-import 'package:netlab/services/connectivity_service.dart';
-import 'package:netlab/services/netlab_controller.dart';
 
-/// Conectividad simulada: solo para controlar lo que "reporta el sistema".
-/// Las peticiones HTTP siguen pasando por ApiService (con MockClient).
-class FakeConnectivity extends ConnectivityService {
-  FakeConnectivity(this.initial);
-  final List<ConnectivityResult> initial;
-  final _controller = StreamController<List<ConnectivityResult>>.broadcast();
-
-  @override
-  Future<List<ConnectivityResult>> current() async => initial;
-
-  @override
-  Stream<List<ConnectivityResult>> get changes => _controller.stream;
-}
-
-NetLabController buildController({
-  required List<ConnectivityResult> connectivity,
-  required MockClientHandler handler,
-}) =>
-    NetLabController(
-      connectivity: FakeConnectivity(connectivity),
-      api: ApiService(client: MockClient(handler)),
-    );
-
-void useSmallScreen(WidgetTester tester) {
-  tester.view.physicalSize = const Size(420, 900);
-  tester.view.devicePixelRatio = 1.0;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-}
+import 'test_helpers.dart';
 
 void main() {
+  const phone = Size(420, 900);
+
   testWidgets('estado de éxito: servidor accesible y Wi-Fi reportado', (tester) async {
-    useSmallScreen(tester);
+    useSize(tester, phone);
     final c = buildController(
       connectivity: [ConnectivityResult.wifi],
       handler: (_) async => http.Response('{"id":1}', 200),
@@ -57,7 +27,7 @@ void main() {
   });
 
   testWidgets('estado sin conexión: el sistema no reporta red', (tester) async {
-    useSmallScreen(tester);
+    useSize(tester, phone);
     final c = buildController(
       connectivity: [ConnectivityResult.none],
       handler: (_) async => throw const SocketException('Network is unreachable'),
@@ -71,7 +41,7 @@ void main() {
   });
 
   testWidgets('estado de error HTTP: 500 no se presenta como fallo de red', (tester) async {
-    useSmallScreen(tester);
+    useSize(tester, phone);
     final c = buildController(
       connectivity: [ConnectivityResult.wifi],
       handler: (_) async => http.Response('error', 500),
@@ -85,7 +55,7 @@ void main() {
   });
 
   testWidgets('estado de carga: se muestra mientras la petición está pendiente', (tester) async {
-    useSmallScreen(tester);
+    useSize(tester, phone);
     final gate = Completer<http.Response>();
     final c = buildController(
       connectivity: [ConnectivityResult.wifi],
@@ -103,7 +73,7 @@ void main() {
   });
 
   testWidgets('navegación inferior cambia a API REST', (tester) async {
-    useSmallScreen(tester);
+    useSize(tester, phone);
     final c = buildController(
       connectivity: [ConnectivityResult.wifi],
       handler: (_) async => http.Response('{}', 200),
@@ -111,7 +81,7 @@ void main() {
     await tester.pumpWidget(NetLabApp(controller: c));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('API REST').last);
+    await tester.tap(find.byIcon(Icons.http_outlined));
     await tester.pumpAndSettle();
     expect(find.text('Solicitud'), findsOneWidget);
   });

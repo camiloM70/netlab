@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../models/api_result.dart';
 import '../../services/history_service.dart';
 import '../../services/netlab_controller.dart';
 import '../../widgets/activity_widgets.dart';
 import '../../widgets/common.dart';
+import '../../widgets/dialogs.dart';
+import '../../widgets/responsive.dart';
 
+/// Historial. Móvil: tarjetas. Ancho ≥ 720 dp: filas con columnas alineadas.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key, required this.controller});
   final NetLabController controller;
@@ -15,23 +19,18 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  static const _kinds = ['GET', 'POST', 'PUT', 'DELETE', 'DIAGNÓSTICO', 'DIO'];
+  static const _kinds = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'DIAGNÓSTICO', 'DIO'];
   String? _kind;
   Outcome? _outcome;
 
   Future<void> _confirmClear() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Limpiar historial'),
-        content: const Text('Se borrarán todos los registros de esta sesión. Esta acción no se puede deshacer.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Limpiar')),
-        ],
-      ),
+    final ok = await confirmDialog(
+      context,
+      title: 'Limpiar historial',
+      message: 'Se borrarán todos los registros de esta sesión. Esta acción no se puede deshacer.',
+      confirmLabel: 'Limpiar',
     );
-    if (ok == true) widget.controller.clearHistory();
+    if (ok) widget.controller.clearHistory();
   }
 
   @override
@@ -52,9 +51,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 icon: const Icon(Icons.delete_outline),
               ),
             ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
+            AdaptiveChipRow(
               children: [
                 ChoiceChip(
                   label: const Text('Todos'),
@@ -69,10 +66,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
               ],
             ),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
+            const SizedBox(height: NetSpacing.xs),
+            AdaptiveChipRow(
               children: [
                 ChoiceChip(
                   label: const Text('Cualquier resultado'),
@@ -87,7 +82,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: NetSpacing.lg),
             if (all.isEmpty)
               const PanelCard(
                 child: EmptyState(
@@ -97,13 +92,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
               )
             else if (shown.isEmpty)
               const PanelCard(
-                child: EmptyState(
-                  icon: Icons.filter_alt_off_outlined,
-                  message: 'Ningún registro coincide con los filtros.',
-                ),
+                child: EmptyState(icon: Icons.filter_alt_off_outlined, message: 'Ningún registro coincide con los filtros.'),
               )
             else
-              for (final e in shown) HistoryDetailTile(entry: e),
+              ResponsiveLayout(
+                builder: (context, cls, width) {
+                  final wide = width >= 720;
+                  return Column(
+                    children: [
+                      if (wide) const HistoryTableHeader(),
+                      for (final e in shown) HistoryDetailTile(entry: e, wide: wide),
+                    ],
+                  );
+                },
+              ),
           ],
         );
       },
