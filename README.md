@@ -52,7 +52,7 @@ No se usa gestor de estado externo para mantener el código fácil de explicar.
 
 ## 5. Instalación
 Requisitos: Flutter estable reciente (Dart ≥ 3.5), Android SDK/dispositivo real con depuración USB.
-```
+
 
 Este repositorio contiene el código Dart, pruebas y `pubspec.yaml`. Las carpetas de plataforma se generan con Flutter:
 ```bash
@@ -134,7 +134,7 @@ Si usas tu propia API, habilita CORS en el backend (p. ej. en json-server ya vie
 - Los datos de `connectivity_plus` varían por plataforma.
 
 ## 12. Capturas
-_Pendiente: añadir capturas reales tomadas en el dispositivo._
+_Pendiente: 
 
 ## 13. Créditos
 El código de NetLab se distribuye bajo la licencia [MIT](./LICENSE).
